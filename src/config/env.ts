@@ -45,3 +45,4 @@ export function getEnvConfig(validate = true): EnvConfig {
     NODE_ENV: nodeEnv,
   };
 }
+

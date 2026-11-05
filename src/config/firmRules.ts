@@ -105,3 +105,4 @@ export function getFirmPreset(firmId?: string): FirmRulePreset {
   const key = firmId.toLowerCase().trim();
   return FIRM_PRESETS[key] || FIRM_PRESETS.generic!;
 }
+

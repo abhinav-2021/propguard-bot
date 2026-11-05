@@ -156,3 +156,4 @@ describe('Discord Slash Commands Suite', () => {
     });
   });
 });
+

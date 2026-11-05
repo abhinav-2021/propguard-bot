@@ -81,23 +81,24 @@ export function buildCutoffEmbed(info: CmeSessionInfo, firmPreset?: FirmRulePres
     .setTitle(`⏱️ CME Futures Session & Auto-Liquidation Monitor`)
     .setDescription(
       `**Market Status:** **${info.statusLabel}**\n` +
-        `**Current Time:** ${info.currentEasternTime} (${info.currentChicagoTime})\n` +
-        `${firmPreset ? `**Firm Profile:** \`${firmPreset.name}\` (Cutoff: ${cutoffTimeEst} EST)\n` : ''}`
+        `**Current Market Time:** ${info.currentEasternTime} (${info.currentChicagoTime})\n` +
+        `**UTC Time:** \`${info.currentUtcTime}\`\n` +
+        `${firmPreset ? `**Firm Profile:** \`${firmPreset.name}\` (Cutoff: ${cutoffTimeEst} EST / 21:55 UTC)\n` : ''}`
     )
     .addFields(
       {
         name: '🛑 Next CME Session Halt / Close',
-        value: `${info.discordTimestamps.haltFull}\n**Countdown:** ${info.discordTimestamps.haltRelative}`,
+        value: `**Target Event:** \`16:59 EST / 21:59 UTC\`\n**Your Local Time:** ${info.discordTimestamps.haltFull}\n**Countdown:** ${info.discordTimestamps.haltRelative}`,
         inline: true,
       },
       {
         name: '🚨 Broker Auto-Liquidation Window',
-        value: `${info.discordTimestamps.liquidationFull}\n**Deadline:** ${info.discordTimestamps.liquidationRelative}`,
+        value: `**Cutoff Rule:** \`${cutoffTimeEst} EST / 21:55 UTC\`\n**Your Local Time:** ${info.discordTimestamps.liquidationFull}\n**Deadline:** ${info.discordTimestamps.liquidationRelative}`,
         inline: true,
       },
       {
         name: '🔄 Next Market Reopen',
-        value: `${info.discordTimestamps.reopenFull}\n**Reopens:** ${info.discordTimestamps.reopenRelative}`,
+        value: `**Target Event:** \`18:00 EST / 23:00 UTC\`\n**Your Local Time:** ${info.discordTimestamps.reopenFull}\n**Reopens:** ${info.discordTimestamps.reopenRelative}`,
         inline: false,
       }
     )
@@ -251,3 +252,4 @@ export function buildErrorEmbed(message: string): EmbedBuilder {
     .setFooter({ text: BOT_FOOTER })
     .setTimestamp();
 }
+
