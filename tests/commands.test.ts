@@ -89,7 +89,7 @@ describe('Discord Slash Commands Suite', () => {
       expect(mockReply).toHaveBeenCalledTimes(1);
       const callArg = mockReply.mock.calls[0]![0];
       expect(callArg.ephemeral).toBe(true);
-      expect(callArg.embeds[0].data.title).toContain('PropGuard Validation Error');
+      expect(callArg.embeds[0].data.title).toContain('Risk Verification Error');
     });
   });
 
@@ -118,7 +118,7 @@ describe('Discord Slash Commands Suite', () => {
       expect(mockReply).toHaveBeenCalledTimes(1);
       const callArg = mockReply.mock.calls[0]![0];
       expect(callArg.embeds).toBeDefined();
-      expect(callArg.embeds[0].data.title).toContain('CME Futures Session & Auto-Liquidation Monitor');
+      expect(callArg.embeds[0].data.title).toContain('CME Futures Session & Cutoff Monitor');
     });
   });
 

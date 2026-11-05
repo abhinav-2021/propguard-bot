@@ -3,7 +3,7 @@ import {
   ChatInputCommandInteraction,
 } from 'discord.js';
 import { calculateDrawdown, DrawdownModel } from '../services/drawdownCalculator';
-import { getFirmPreset } from '../config/firmRules';
+import { getTenantConfig, findTenantTier } from '../config/tenants';
 import { buildDrawdownEmbed, buildErrorEmbed } from '../utils/embedBuilder';
 
 export const drawdownCommand = {
@@ -55,7 +55,7 @@ export const drawdownCommand = {
     .addStringOption((option) =>
       option
         .setName('firm')
-        .setDescription('Prop firm preset for tailored rules & context (optional)')
+        .setDescription('Override tenant firm branding (defaults to current Discord server configuration)')
         .setRequired(false)
         .addChoices(
           { name: 'Tradeify (EOD Growth / Lightning Intraday)', value: 'tradeify' },
@@ -67,6 +67,9 @@ export const drawdownCommand = {
     ),
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    const firmKey = interaction.options.getString('firm') ?? undefined;
+    const tenant = getTenantConfig(interaction.guildId, firmKey);
+
     try {
       const accountSize = interaction.options.getNumber('account_size', true);
       const maxLoss = interaction.options.getNumber('max_loss', true);
@@ -74,9 +77,6 @@ export const drawdownCommand = {
       const peakValue = interaction.options.getNumber('peak_value', true);
       const currentEquity = interaction.options.getNumber('current_equity', true);
       const isFunded = interaction.options.getBoolean('is_funded') ?? false;
-      const firmKey = interaction.options.getString('firm') ?? undefined;
-
-      const firmPreset = getFirmPreset(firmKey);
 
       const breakdown = calculateDrawdown({
         accountSize,
@@ -87,11 +87,14 @@ export const drawdownCommand = {
         isFunded,
       });
 
-      const embed = buildDrawdownEmbed(breakdown, firmPreset);
+      // Check if this matches a predefined account tier for the tenant
+      const matchedTier = findTenantTier(tenant, accountSize);
+
+      const embed = buildDrawdownEmbed(breakdown, tenant, matchedTier);
       await interaction.reply({ embeds: [embed] });
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-      const errorEmbed = buildErrorEmbed(errorMessage);
+      const errorEmbed = buildErrorEmbed(errorMessage, tenant);
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
       } else {
@@ -100,4 +103,3 @@ export const drawdownCommand = {
     }
   },
 };
-

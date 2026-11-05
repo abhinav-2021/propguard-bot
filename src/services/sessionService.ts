@@ -87,18 +87,27 @@ export function getNextWeekdayHaltUtc(from: Date = new Date()): Date {
 }
 
 /**
- * Finds the next occurrence of 21:55:00 UTC (4:55 PM EST) on a weekday.
+ * Finds the next occurrence of the broker auto-liquidation cutoff on a weekday.
+ * Based on cutoffOffsetMinutes before the 17:00 ET / 22:00 UTC daily session close (default: 5 min -> 21:55 UTC).
  */
-export function getNextWeekdayLiquidationUtc(from: Date = new Date()): Date {
+export function getNextWeekdayLiquidationUtc(
+  from: Date = new Date(),
+  cutoffOffsetMinutes: number = 5
+): Date {
   const y = from.getUTCFullYear();
   const m = from.getUTCMonth();
   const d = from.getUTCDate();
 
-  const candidate = new Date(Date.UTC(y, m, d, LIQ_HOUR_UTC, LIQ_MIN_UTC, 0, 0));
+  // 17:00 ET close corresponds to 22:00 UTC (1320 minutes)
+  const totalLiqMinutes = 22 * 60 - cutoffOffsetMinutes;
+  const liqHour = Math.floor(totalLiqMinutes / 60);
+  const liqMin = totalLiqMinutes % 60;
+
+  const candidate = new Date(Date.UTC(y, m, d, liqHour, liqMin, 0, 0));
   let target = candidate;
 
   if (from.getTime() >= candidate.getTime()) {
-    target = new Date(Date.UTC(y, m, d + 1, LIQ_HOUR_UTC, LIQ_MIN_UTC, 0, 0));
+    target = new Date(Date.UTC(y, m, d + 1, liqHour, liqMin, 0, 0));
   }
 
   const day = target.getUTCDay();
@@ -158,11 +167,13 @@ export function getNextReopenUtc(from: Date = new Date()): Date {
 /**
  * Analyzes the CME market session status and calculates upcoming halt and auto-liquidation countdowns
  * based on pure UTC timestamps (21:59 UTC weekday pause).
+ * @param now Reference timestamp (defaults to current time)
+ * @param cutoffOffsetMinutes Minutes before 17:00 ET maintenance pause when positions must be flattened (defaults to 5)
  */
-export function getCmeSessionInfo(now: Date = new Date()): CmeSessionInfo {
+export function getCmeSessionInfo(now: Date = new Date(), cutoffOffsetMinutes: number = 5): CmeSessionInfo {
   const dayOfWeek = now.getUTCDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
   const totalMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const liqMinutes = LIQ_HOUR_UTC * 60 + LIQ_MIN_UTC; // 21:55 UTC (1315 min)
+  const liqMinutes = 22 * 60 - cutoffOffsetMinutes; // e.g. 21:55 UTC (1315 min)
   const haltMinutes = HALT_HOUR_UTC * 60 + HALT_MIN_UTC; // 21:59 UTC (1319 min)
   const reopenMinutes = REOPEN_HOUR_UTC * 60 + REOPEN_MIN_UTC; // 23:00 UTC (1380 min)
 
@@ -217,7 +228,7 @@ export function getCmeSessionInfo(now: Date = new Date()): CmeSessionInfo {
 
   // Calculate target milestones using pure UTC functions
   const nextHaltTime = getNextWeekdayHaltUtc(now);
-  const nextAutoLiquidationTime = getNextWeekdayLiquidationUtc(now);
+  const nextAutoLiquidationTime = getNextWeekdayLiquidationUtc(now, cutoffOffsetMinutes);
   const nextReopenTime = getNextReopenUtc(now);
 
   const nowMs = now.getTime();

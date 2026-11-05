@@ -2,7 +2,7 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
 } from 'discord.js';
-import { getFirmPreset } from '../config/firmRules';
+import { getTenantConfig } from '../config/tenants';
 import {
   buildDisputeCheckEmbed,
   buildErrorEmbed,
@@ -36,7 +36,7 @@ export const disputeCheckCommand = {
     .addStringOption((option) =>
       option
         .setName('firm')
-        .setDescription('Prop firm preset for customized rule citations (optional)')
+        .setDescription('Override tenant firm branding (defaults to current server configuration)')
         .setRequired(false)
         .addChoices(
           { name: 'Tradeify', value: 'tradeify' },
@@ -48,18 +48,18 @@ export const disputeCheckCommand = {
     ),
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    const firmKey = interaction.options.getString('firm') ?? undefined;
+    const tenant = getTenantConfig(interaction.guildId, firmKey);
+
     try {
       const scenario = interaction.options.getString('scenario', true) as DisputeScenario;
-      const firmKey = interaction.options.getString('firm') ?? undefined;
-      const firmPreset = getFirmPreset(firmKey);
-
-      const embed = buildDisputeCheckEmbed(scenario, firmPreset);
+      const embed = buildDisputeCheckEmbed(scenario, tenant);
 
       // Sent as ephemeral so user gets instant personal clarity without spamming channel
       await interaction.reply({ embeds: [embed], ephemeral: true });
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-      const errorEmbed = buildErrorEmbed(errorMessage);
+      const errorEmbed = buildErrorEmbed(errorMessage, tenant);
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
       } else {
@@ -68,4 +68,3 @@ export const disputeCheckCommand = {
     }
   },
 };
-

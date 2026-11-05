@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { calculateDrawdown } from '../src/services/drawdownCalculator';
 import { getCmeSessionInfo } from '../src/services/sessionService';
-import { getFirmPreset } from '../src/config/firmRules';
+import { getTenantByFirmId } from '../src/config/tenants';
 import {
   buildDrawdownEmbed,
   buildCutoffEmbed,
@@ -9,9 +9,9 @@ import {
   buildErrorEmbed,
 } from '../src/utils/embedBuilder';
 
-describe('Embed Builder Utility', () => {
+describe('Embed Builder Utility with Whitelabeling', () => {
   describe('buildDrawdownEmbed', () => {
-    it('creates rich embed for healthy funded account', () => {
+    it('creates whitelabeled rich embed with brand color and logo', () => {
       const breakdown = calculateDrawdown({
         accountSize: 50000,
         maxLoss: 2000,
@@ -21,14 +21,17 @@ describe('Embed Builder Utility', () => {
         isFunded: true,
       });
 
-      const preset = getFirmPreset('apex');
-      const embed = buildDrawdownEmbed(breakdown, preset);
+      const tenant = getTenantByFirmId('tradeify');
+      const tier = tenant.tiers[0];
+      const embed = buildDrawdownEmbed(breakdown, tenant, tier);
       const json = embed.toJSON();
 
-      expect(json.title).toContain('Drawdown Verification | HEALTHY');
-      expect(json.color).toBe(0x57f287);
+      expect(json.title).toContain('Tradeify Drawdown Verification | HEALTHY');
+      expect(json.color).toBe(tenant.brandColor);
+      expect(json.thumbnail?.url).toBe(tenant.logoUrl);
       expect(json.description).toContain('Funded Lock Barrier Active');
-      expect(json.fields).toBeDefined();
+      expect(json.description).toContain('50K Growth (EOD)');
+      expect(json.footer?.text).toContain('Tradeify Risk Engine • Powered by PropGuard');
 
       const fieldNames = json.fields!.map((f) => f.name);
       expect(fieldNames).toContain('💼 Initial Capital');
@@ -37,7 +40,7 @@ describe('Embed Builder Utility', () => {
       expect(fieldNames).toContain('🎯 Current Live Equity');
       expect(fieldNames).toContain('🔒 Liquidation Floor (LOCKED)');
       expect(fieldNames).toContain('🛡️ Usable Buffer Remaining');
-      expect(fieldNames).toContain('📐 Mathematical Breakdown');
+      expect(fieldNames).toContain('🎫 Need Assistance?');
     });
 
     it('creates rich embed for breached account with red color', () => {
@@ -78,45 +81,56 @@ describe('Embed Builder Utility', () => {
   });
 
   describe('buildCutoffEmbed', () => {
-    it('creates rich embed with Discord timestamps and warnings', () => {
-      const info = getCmeSessionInfo(new Date('2026-11-04T15:00:00Z'));
-      const preset = getFirmPreset('tradeify');
-      const embed = buildCutoffEmbed(info, preset);
+    it('creates rich embed with Discord timestamps, whitelabel branding, and firm cutoff', () => {
+      const tenant = getTenantByFirmId('tradeify');
+      const info = getCmeSessionInfo(new Date('2026-11-04T15:00:00Z'), tenant.cutoffOffsetMinutes);
+      const embed = buildCutoffEmbed(info, tenant);
       const json = embed.toJSON();
 
-      expect(json.title).toContain('CME Futures Session & Auto-Liquidation Monitor');
+      expect(json.title).toContain('Tradeify CME Futures Session & Cutoff Monitor');
+      expect(json.color).toBe(tenant.brandColor);
+      expect(json.thumbnail?.url).toBe(tenant.logoUrl);
       expect(json.fields).toBeDefined();
 
       const fieldHalt = json.fields!.find((f) => f.name.includes('Next CME Session Halt'));
       expect(fieldHalt?.value).toContain(`<t:${info.nextHaltUnix}:R>`);
 
-      const fieldLiq = json.fields!.find((f) => f.name.includes('Broker Auto-Liquidation Window'));
+      const fieldLiq = json.fields!.find((f) => f.name.includes('Auto-Liquidation Cutoff'));
       expect(fieldLiq?.value).toContain(`<t:${info.nextAutoLiquidationUnix}:R>`);
+
+      const supportField = json.fields!.find((f) => f.name.includes('Support Link'));
+      expect(supportField?.value).toContain(tenant.supportTicketUrl!);
     });
   });
 
   describe('buildDisputeCheckEmbed', () => {
-    it('creates rich embed for green_blowup scenario', () => {
-      const embed = buildDisputeCheckEmbed('green_blowup', getFirmPreset('apex'));
+    it('creates rich embed for green_blowup scenario with tenant branding', () => {
+      const tenant = getTenantByFirmId('apex');
+      const embed = buildDisputeCheckEmbed('green_blowup', tenant);
       const json = embed.toJSON();
 
+      expect(json.title).toContain('Apex Trader Funding');
       expect(json.title).toContain('Why Did My Account Fail When My Trade Closed Green?');
+      expect(json.color).toBe(tenant.brandColor);
       expect(json.description).toContain('Intraday Peak Unrealized Equity');
       expect(json.fields?.length).toBeGreaterThanOrEqual(3);
     });
 
-    it('creates rich embed for cme_halt scenario', () => {
-      const embed = buildDisputeCheckEmbed('cme_halt', getFirmPreset('tradeify'));
+    it('creates rich embed for cme_halt scenario with tenant cutoff details', () => {
+      const tenant = getTenantByFirmId('tradeify');
+      const embed = buildDisputeCheckEmbed('cme_halt', tenant);
       const json = embed.toJSON();
 
-      expect(json.title).toContain('Why Was My Position Auto-Closed Before 5:00 PM EST?');
-      expect(json.description).toContain('Broker-Side Pre-Halt Auto-Liquidation Window');
+      expect(json.title).toContain('Tradeify');
+      expect(json.description).toContain('5 min before 17:00 ET');
     });
 
     it('creates rich embed for daily_vs_trailing scenario', () => {
-      const embed = buildDisputeCheckEmbed('daily_vs_trailing', getFirmPreset('lucid'));
+      const tenant = getTenantByFirmId('lucid');
+      const embed = buildDisputeCheckEmbed('daily_vs_trailing', tenant);
       const json = embed.toJSON();
 
+      expect(json.title).toContain('Lucid Trading');
       expect(json.title).toContain('Soft Breach vs. Hard Breach');
       expect(json.fields?.some((f) => f.name.includes('Daily Loss Limit'))).toBe(true);
       expect(json.fields?.some((f) => f.name.includes('Trailing Drawdown'))).toBe(true);
@@ -124,14 +138,14 @@ describe('Embed Builder Utility', () => {
   });
 
   describe('buildErrorEmbed', () => {
-    it('creates an error embed with message', () => {
-      const embed = buildErrorEmbed('Invalid parameter supplied.');
+    it('creates an error embed with message and tenant branding', () => {
+      const tenant = getTenantByFirmId('tradeify');
+      const embed = buildErrorEmbed('Invalid parameter supplied.', tenant);
       const json = embed.toJSON();
 
-      expect(json.title).toBe('⚠️ PropGuard Validation Error');
+      expect(json.title).toBe('⚠️ Tradeify Risk Verification Error');
       expect(json.description).toBe('Invalid parameter supplied.');
       expect(json.color).toBe(0xed4245);
     });
   });
 });
-

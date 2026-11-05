@@ -1,27 +1,30 @@
 import { EmbedBuilder } from 'discord.js';
 import { DrawdownBreakdown, formatCurrency } from '../services/drawdownCalculator';
 import { CmeSessionInfo } from '../services/sessionService';
-import { FirmRulePreset } from '../config/firmRules';
+import { TenantConfig, AccountTier, getTenantConfig } from '../config/tenants';
 
 export type DisputeScenario = 'green_blowup' | 'cme_halt' | 'daily_vs_trailing';
 
-const BOT_NAME = 'PropGuard';
-const BOT_FOOTER = 'PropGuard • Institutional Risk & Support Engine';
-
 /**
- * Builds the rich Embed for the /drawdown calculation engine.
+ * Builds the rich Embed for the /drawdown calculation engine with whitelabel branding.
  */
 export function buildDrawdownEmbed(
   breakdown: DrawdownBreakdown,
-  firmPreset?: FirmRulePreset
+  tenantConfig?: TenantConfig,
+  selectedTier?: AccountTier
 ): EmbedBuilder {
+  const tenant = tenantConfig || getTenantConfig();
+
+  // For Healthy state, use tenant brand color if desired, or stateColor for safety clarity
+  const color = breakdown.state === 'HEALTHY' ? tenant.brandColor : breakdown.stateColorNumber;
+
   const embed = new EmbedBuilder()
-    .setColor(breakdown.stateColorNumber)
-    .setTitle(`🛡️ Drawdown Verification | ${breakdown.state}`)
+    .setColor(color)
+    .setTitle(`🛡️ ${tenant.firmName} Drawdown Verification | ${breakdown.state}`)
     .setDescription(
-      `**Model:** \`${breakdown.modelDescription.split(':')[0]}\` ${
+      `**Firm:** \`${tenant.firmName}\` • **Model:** \`${breakdown.modelDescription.split(':')[0]}\` ${
         breakdown.isFunded ? '• **[FUNDED / PA ACCOUNT]**' : '• **[EVALUATION PHASE]**'
-      }\n${firmPreset ? `**Firm Preset:** \`${firmPreset.name}\`\n` : ''}\n${breakdown.explanation}`
+      }\n${selectedTier ? `**Account Tier:** \`${selectedTier.name}\`\n` : ''}\n${breakdown.explanation}`
     )
     .addFields(
       {
@@ -53,37 +56,58 @@ export function buildDrawdownEmbed(
         name: breakdown.buffer <= 0 ? '💥 Breach Deficit' : '🛡️ Usable Buffer Remaining',
         value: `\`${formatCurrency(breakdown.buffer)}\``,
         inline: true,
-      },
-      {
-        name: '📐 Mathematical Breakdown',
-        value: `\`\`\`text\n${breakdown.mathFormula}\nBuffer = Current Equity (${formatCurrency(
-          breakdown.currentEquity
-        )}) - Floor (${formatCurrency(breakdown.floor)}) = ${formatCurrency(
-          breakdown.buffer
-        )}\n\`\`\``,
-        inline: false,
       }
-    )
-    .setFooter({ text: BOT_FOOTER })
-    .setTimestamp();
+    );
+
+  if (selectedTier?.dailyLossLimit) {
+    embed.addFields({
+      name: '⚠️ Daily Loss Limit',
+      value: `\`${formatCurrency(selectedTier.dailyLossLimit)}\` (Soft Lock)`,
+      inline: true,
+    });
+  }
+
+  embed.addFields({
+    name: '📐 Mathematical Breakdown',
+    value: `\`\`\`text\n${breakdown.mathFormula}\nBuffer = Current Equity (${formatCurrency(
+      breakdown.currentEquity
+    )}) - Floor (${formatCurrency(breakdown.floor)}) = ${formatCurrency(
+      breakdown.buffer
+    )}\n\`\`\``,
+    inline: false,
+  });
+
+  if (tenant.supportTicketUrl) {
+    embed.addFields({
+      name: '🎫 Need Assistance?',
+      value: `Still have questions about your account? [Open a ${tenant.firmName} Support Ticket](${tenant.supportTicketUrl})`,
+      inline: false,
+    });
+  }
+
+  if (tenant.logoUrl) {
+    embed.setThumbnail(tenant.logoUrl);
+  }
+
+  embed.setFooter({ text: `${tenant.firmName} Risk Engine • Powered by PropGuard` }).setTimestamp();
 
   return embed;
 }
 
 /**
- * Builds the rich Embed for the /cutoff CME market halt timer.
+ * Builds the rich Embed for the /cutoff CME market halt timer with whitelabel branding.
  */
-export function buildCutoffEmbed(info: CmeSessionInfo, firmPreset?: FirmRulePreset): EmbedBuilder {
-  const cutoffTimeEst = firmPreset?.autoLiquidationCutoffTimeEst || '16:55';
+export function buildCutoffEmbed(info: CmeSessionInfo, tenantConfig?: TenantConfig): EmbedBuilder {
+  const tenant = tenantConfig || getTenantConfig();
 
   const embed = new EmbedBuilder()
-    .setColor(info.statusColorNum)
-    .setTitle(`⏱️ CME Futures Session & Auto-Liquidation Monitor`)
+    .setColor(tenant.brandColor)
+    .setTitle(`⏱️ ${tenant.firmName} CME Futures Session & Cutoff Monitor`)
     .setDescription(
       `**Market Status:** **${info.statusLabel}**\n` +
         `**Current Market Time:** ${info.currentEasternTime} (${info.currentChicagoTime})\n` +
         `**UTC Time:** \`${info.currentUtcTime}\`\n` +
-        `${firmPreset ? `**Firm Profile:** \`${firmPreset.name}\` (Cutoff: ${cutoffTimeEst} EST / 21:55 UTC)\n` : ''}`
+        `**Firm Policy:** \`${tenant.firmName}\` (Mandatory flatten **${tenant.cutoffOffsetMinutes} min** prior to 17:00 ET halt)\n`
     )
     .addFields(
       {
@@ -92,8 +116,8 @@ export function buildCutoffEmbed(info: CmeSessionInfo, firmPreset?: FirmRulePres
         inline: true,
       },
       {
-        name: '🚨 Broker Auto-Liquidation Window',
-        value: `**Cutoff Rule:** \`${cutoffTimeEst} EST / 21:55 UTC\`\n**Your Local Time:** ${info.discordTimestamps.liquidationFull}\n**Deadline:** ${info.discordTimestamps.liquidationRelative}`,
+        name: `🚨 ${tenant.firmName} Auto-Liquidation Cutoff`,
+        value: `**Mandatory Flatten:** \`${tenant.cutoffOffsetMinutes}m before halt\`\n**Your Local Time:** ${info.discordTimestamps.liquidationFull}\n**Deadline:** ${info.discordTimestamps.liquidationRelative}`,
         inline: true,
       },
       {
@@ -101,35 +125,55 @@ export function buildCutoffEmbed(info: CmeSessionInfo, firmPreset?: FirmRulePres
         value: `**Target Event:** \`18:00 EST / 23:00 UTC\`\n**Your Local Time:** ${info.discordTimestamps.reopenFull}\n**Reopens:** ${info.discordTimestamps.reopenRelative}`,
         inline: false,
       }
-    )
-    .setFooter({ text: `${BOT_NAME} • Chicago Mercantile Exchange (CME) Feed` })
-    .setTimestamp();
+    );
 
   if (info.warnings.length > 0) {
     embed.addFields({
-      name: '⚠️ Crucial Prop Firm Policy Notice',
+      name: `⚠️ Crucial ${tenant.firmName} Policy Notice`,
       value: info.warnings.join('\n\n'),
       inline: false,
     });
   }
 
+  if (tenant.supportTicketUrl) {
+    embed.addFields({
+      name: '🎫 Support Link',
+      value: `Questions about daily cutoffs? [Open a ${tenant.firmName} Support Ticket](${tenant.supportTicketUrl})`,
+      inline: false,
+    });
+  }
+
+  if (tenant.logoUrl) {
+    embed.setThumbnail(tenant.logoUrl);
+  }
+
+  embed.setFooter({ text: `${tenant.firmName} • Chicago Mercantile Exchange (CME) Feed` }).setTimestamp();
+
   return embed;
 }
 
 /**
- * Builds the rich Embed for the /dispute-check pre-ticket deflector.
+ * Builds the rich Embed for the /dispute-check pre-ticket deflector with whitelabel branding.
  */
 export function buildDisputeCheckEmbed(
   scenario: DisputeScenario,
-  firmPreset?: FirmRulePreset
+  tenantConfig?: TenantConfig
 ): EmbedBuilder {
-  const embed = new EmbedBuilder().setFooter({ text: BOT_FOOTER }).setTimestamp();
+  const tenant = tenantConfig || getTenantConfig();
+
+  const embed = new EmbedBuilder()
+    .setFooter({ text: `${tenant.firmName} Support Deflector • Powered by PropGuard` })
+    .setTimestamp();
+
+  if (tenant.logoUrl) {
+    embed.setThumbnail(tenant.logoUrl);
+  }
 
   switch (scenario) {
     case 'green_blowup':
       embed
-        .setColor(0xed4245)
-        .setTitle('🔍 Dispute Deflector: Why Did My Account Fail When My Trade Closed Green?')
+        .setColor(tenant.brandColor || 0xed4245)
+        .setTitle(`🔍 ${tenant.firmName}: Why Did My Account Fail When My Trade Closed Green?`)
         .setDescription(
           `**Root Cause:** **Intraday Peak Unrealized Equity (High-Water Mark) Trailing**\n\n` +
             `A common dispute in futures prop trading occurs when a trader closes a trade in positive profit, yet receives an account failure notice.`
@@ -138,7 +182,7 @@ export function buildDisputeCheckEmbed(
           {
             name: '1️⃣ The Dynamic High-Water Mark Mechanism',
             value:
-              'In Intraday Trailing models (used by Apex, Bulenox Option 1, Tradeify Lightning, etc.), the risk engine monitors your account **tick-by-tick in real-time**.\n' +
+              `Under **${tenant.firmName}** intraday trailing rules, the platform monitors your account **tick-by-tick in real-time**.\n` +
               'The moment your trade hits an open profit peak, your liquidation floor immediately ratchets upwards.',
             inline: false,
           },
@@ -154,10 +198,10 @@ export function buildDisputeCheckEmbed(
             inline: false,
           },
           {
-            name: '3️⃣ Prop Firm Rule Citation',
+            name: '3️⃣ Rule Citation & Prevention',
             value:
               '> *"The trailing maximum drawdown calculates from the highest unrealized profit point achieved during any open trade. The floor does not move down when unrealized profit is given back."*\n\n' +
-              '💡 **Best Practice:** Trail your stop-loss order behind your trade to lock in peak gains before price retraces into your trailed floor.',
+              '💡 **Best Practice:** Always trail stop-loss orders to protect accrued equity before a retracement touches your trailed threshold.',
             inline: false,
           }
         );
@@ -165,38 +209,30 @@ export function buildDisputeCheckEmbed(
 
     case 'cme_halt':
       embed
-        .setColor(0xfee75c)
-        .setTitle('🔍 Dispute Deflector: Why Was My Position Auto-Closed Before 5:00 PM EST?')
+        .setColor(tenant.brandColor || 0xfee75c)
+        .setTitle(`🔍 ${tenant.firmName}: Why Was My Position Auto-Closed Before 5:00 PM EST?`)
         .setDescription(
-          `**Root Cause:** **Broker-Side Pre-Halt Auto-Liquidation Window (4:55 PM – 4:58 PM EST)**\n\n` +
+          `**Root Cause:** **Broker-Side Pre-Halt Auto-Liquidation Window (${tenant.cutoffOffsetMinutes} min before 17:00 ET)**\n\n` +
             `Traders often open tickets asking why their open trades were suddenly closed at market price just minutes before the daily CME maintenance halt.`
         )
         .addFields(
           {
             name: '1️⃣ CME Daily Maintenance Schedule',
             value:
-              'The Chicago Mercantile Exchange (CME) halts electronic equity index futures (ES, NQ, YM, RTY) every Monday through Thursday between **4:59 PM and 6:00 PM US Eastern** (4:00 PM - 5:00 PM CT), and closes on Friday at 4:59 PM EST for the weekend.',
+              'The Chicago Mercantile Exchange (CME) halts electronic equity index futures (ES, NQ, YM, RTY) every Monday through Thursday between **4:59 PM and 6:00 PM US Eastern** (21:59 – 23:00 UTC), and closes on Friday at 4:59 PM EST for the weekend.',
             inline: false,
           },
           {
-            name: '2️⃣ Prop Firm Over-Holding Prohibition',
+            name: `2️⃣ ${tenant.firmName} Position Flattening Policy`,
             value:
-              'Prop firms strictly prohibit holding intraday evaluation or funded accounts through the daily halt to prevent overnight margin shortfalls, massive market gaps, and settlement illiquidity.',
+              `**${tenant.firmName}** strictly prohibits holding intraday evaluation or funded accounts through the daily halt to prevent overnight margin shortfalls and gap risk.\n` +
+              `All open positions must be closed **at least ${tenant.cutoffOffsetMinutes} minutes before** the 17:00 ET halt.`,
             inline: false,
           },
           {
-            name: '3️⃣ Automated Platform Liquidation (4:55 PM – 4:58 PM EST)',
+            name: '3️⃣ Automated Platform Liquidation Routine',
             value:
-              'To guarantee no contracts enter the halt, the clearing platform risk servers (Rithmic, Tradovate, ProjectX, CQG) initiate **forced liquidation routines at 4:55 PM EST**.\n' +
-              '• All open contracts are immediately closed with market orders.\n' +
-              '• All resting limit/stop orders are cancelled.\n' +
-              '• An auto-liquidation violation or fee ($50–$100) may be assessed.',
-            inline: false,
-          },
-          {
-            name: '💡 Solution',
-            value:
-              'Always flatten all open positions and cancel all working pending orders manually by **4:50 PM EST (3:50 PM CT)** at the latest.',
+              `If positions remain open at the cutoff deadline, the clearing platform risk servers automatically flatten contracts via market orders and cancel all pending orders.`,
             inline: false,
           }
         );
@@ -204,16 +240,16 @@ export function buildDisputeCheckEmbed(
 
     case 'daily_vs_trailing':
       embed
-        .setColor(0x5865f2)
-        .setTitle('🔍 Dispute Deflector: Soft Breach vs. Hard Breach (Daily Loss vs. Trailing DD)')
+        .setColor(tenant.brandColor || 0x5865f2)
+        .setTitle(`🔍 ${tenant.firmName}: Soft Breach vs. Hard Breach (Daily Loss vs. Trailing DD)`)
         .setDescription(
           `**Root Cause:** **Confusion Between Daily Loss Limit (Soft Lock) and Total Trailing Drawdown (Hard Account Failure)**`
         )
         .addFields(
           {
-            name: '🛡️ Daily Loss Limit (Typically Soft Breach)',
+            name: '🛡️ Daily Loss Limit (Soft Breach / Lockout)',
             value:
-              '• **Scope:** Calculated strictly within a single CME trading day (6:00 PM EST to 4:59 PM EST the next day).\n' +
+              '• **Scope:** Calculated strictly within a single CME trading session.\n' +
               '• **Action on Breach:** The platform automatically locks your account from opening new positions for the rest of the day.\n' +
               '• **Account Fate:** **Active!** Your account is NOT blown. You can trade again as soon as the next session opens at 6:00 PM EST.',
             inline: false,
@@ -223,19 +259,19 @@ export function buildDisputeCheckEmbed(
             value:
               '• **Scope:** Calculated cumulatively from the all-time peak equity / high-water mark.\n' +
               '• **Action on Breach:** Immediate liquidation and contract termination.\n' +
-              '• **Account Fate:** **Terminated.** The evaluation or funded account has failed and must be reset or repurchased.',
-            inline: false,
-          },
-          {
-            name: '⚠️ Key Warning on Firm Differences',
-            value:
-              firmPreset
-                ? `Under **${firmPreset.name}**, Daily Loss Limit is classified as: **${firmPreset.dailyLossLimitType}**.\n${firmPreset.rulesSummary.drawdownExplanation}`
-                : 'Always check your firm specific rules: Some prop firms (e.g. Apex) do not enforce a daily loss limit, while others (e.g. Lucid, Topstep, MyFundedFutures) treat certain daily loss rules strictly.',
+              '• **Account Fate:** **Terminated.** The account has breached the maximum loss rule and must be reset.',
             inline: false,
           }
         );
       break;
+  }
+
+  if (tenant.supportTicketUrl) {
+    embed.addFields({
+      name: `🎫 Still have doubts?`,
+      value: `Reach out directly to the **${tenant.firmName}** team: [Submit a Support Ticket](${tenant.supportTicketUrl})`,
+      inline: false,
+    });
   }
 
   return embed;
@@ -244,12 +280,12 @@ export function buildDisputeCheckEmbed(
 /**
  * Builds a standardized error embed for command error responses.
  */
-export function buildErrorEmbed(message: string): EmbedBuilder {
+export function buildErrorEmbed(message: string, tenantConfig?: TenantConfig): EmbedBuilder {
+  const tenant = tenantConfig || getTenantConfig();
   return new EmbedBuilder()
     .setColor(0xed4245)
-    .setTitle('⚠️ PropGuard Validation Error')
+    .setTitle(`⚠️ ${tenant.firmName} Risk Verification Error`)
     .setDescription(message)
-    .setFooter({ text: BOT_FOOTER })
+    .setFooter({ text: `${tenant.firmName} • Whitelabeled by PropGuard` })
     .setTimestamp();
 }
-

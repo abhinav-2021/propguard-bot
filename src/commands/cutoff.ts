@@ -3,7 +3,7 @@ import {
   ChatInputCommandInteraction,
 } from 'discord.js';
 import { getCmeSessionInfo } from '../services/sessionService';
-import { getFirmPreset } from '../config/firmRules';
+import { getTenantConfig } from '../config/tenants';
 import { buildCutoffEmbed, buildErrorEmbed } from '../utils/embedBuilder';
 
 export const cutoffCommand = {
@@ -13,7 +13,7 @@ export const cutoffCommand = {
     .addStringOption((option) =>
       option
         .setName('firm')
-        .setDescription('Prop firm preset to highlight firm-specific auto-liquidation deadlines (optional)')
+        .setDescription('Override tenant firm branding (defaults to current server configuration)')
         .setRequired(false)
         .addChoices(
           { name: 'Tradeify (4:55 PM EST Cutoff)', value: 'tradeify' },
@@ -25,17 +25,17 @@ export const cutoffCommand = {
     ),
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    try {
-      const firmKey = interaction.options.getString('firm') ?? undefined;
-      const firmPreset = getFirmPreset(firmKey);
+    const firmKey = interaction.options.getString('firm') ?? undefined;
+    const tenant = getTenantConfig(interaction.guildId, firmKey);
 
-      const sessionInfo = getCmeSessionInfo();
-      const embed = buildCutoffEmbed(sessionInfo, firmPreset);
+    try {
+      const sessionInfo = getCmeSessionInfo(new Date(), tenant.cutoffOffsetMinutes);
+      const embed = buildCutoffEmbed(sessionInfo, tenant);
 
       await interaction.reply({ embeds: [embed] });
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-      const errorEmbed = buildErrorEmbed(errorMessage);
+      const errorEmbed = buildErrorEmbed(errorMessage, tenant);
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
       } else {
@@ -44,4 +44,3 @@ export const cutoffCommand = {
     }
   },
 };
-
