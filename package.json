@@ -1,0 +1,37 @@
+{
+  "name": "propguard-bot",
+  "version": "1.0.0",
+  "description": "B2B Discord Risk & Support Bot for Retail Futures Prop Firms",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "deploy:commands": "ts-node src/scripts/deployCommands.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "verify": "vitest run && tsc"
+  },
+  "keywords": [
+    "discord-bot",
+    "futures",
+    "prop-firm",
+    "risk-management",
+    "drawdown"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "date-fns": "^3.6.0",
+    "date-fns-tz": "^3.2.0",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
