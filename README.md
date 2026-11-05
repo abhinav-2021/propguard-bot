@@ -38,6 +38,7 @@ src/
 ├── index.ts                  # Bot initialization, event listeners, slash command dispatcher
 ├── config/
 │   ├── env.ts                # Validated environment variables (DISCORD_TOKEN, CLIENT_ID, GUILD_ID)
+│   ├── tenants.ts            # Centralized Multi-Tenant Registry & Account Tiers
 │   └── firmRules.ts          # Configurable presets for target prop firms (Tradeify, Lucid, Apex, Generic)
 ├── commands/
 │   ├── index.ts              # Command aggregator & type mappings
@@ -52,9 +53,10 @@ src/
 └── scripts/
     └── deployCommands.ts     # REST API Slash command registration (guild-specific or global)
 tests/
+├── tenants.test.ts            # Multi-tenant registry, guild resolution, and tier matching tests
 ├── drawdownCalculator.test.ts # 19 unit tests covering trailing, locks, boundaries, & EOD
-├── sessionService.test.ts     # 8 unit tests covering trading sessions, halts, and weekends
-├── embedBuilder.test.ts       # Embed layout and formatting tests
+├── sessionService.test.ts     # 11 unit tests covering pure UTC halts, cutoffs, and weekends
+├── embedBuilder.test.ts       # Whitelabel embed branding and layout tests
 └── commands.test.ts           # Command option validation and mock interaction tests
 ```
 

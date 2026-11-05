@@ -278,6 +278,81 @@ export function buildDisputeCheckEmbed(
 }
 
 /**
+ * Builds the automated 16:45 ET daily alert embed for scheduled announcement broadcasts.
+ */
+export function buildCutoffAlertEmbed(
+  tenantConfig?: TenantConfig,
+  targetLiquidationTime?: Date,
+  targetHaltTime?: Date
+): EmbedBuilder {
+  const tenant = tenantConfig || getTenantConfig();
+
+  // If target times are not provided, compute them for today (10 mins and 14 mins from alert)
+  const now = new Date();
+  const liqTime = targetLiquidationTime || new Date(now.getTime() + 10 * 60 * 1000);
+  const haltTime = targetHaltTime || new Date(now.getTime() + 14 * 60 * 1000);
+
+  const liqUnix = Math.floor(liqTime.getTime() / 1000);
+  const haltUnix = Math.floor(haltTime.getTime() / 1000);
+
+  const embed = new EmbedBuilder()
+    .setColor(0xed4245) // Red alert border
+    .setTitle(`🚨 MANDATORY POSITION FLATTENING ALERT | 10 MINUTES REMAINING`)
+    .setDescription(
+      `⚠️ **ATTENTION ALL ${tenant.firmName.toUpperCase()} TRADERS:**\n` +
+        `The broker-side auto-liquidation cutoff window begins in exactly **10 minutes** at **16:55 US Eastern** (21:55 UTC).\n\n` +
+        `To protect your accounts against forced market liquidations, slippage, and rule breach fees, **all intraday contracts and working orders must be completely flattened now**.`
+    )
+    .addFields(
+      {
+        name: `🚨 ${tenant.firmName} Auto-Liquidation Cutoff (16:55 ET)`,
+        value: `**Cutoff Deadline:** <t:${liqUnix}:F>\n**Time Remaining:** <t:${liqUnix}:R>`,
+        inline: true,
+      },
+      {
+        name: '🛑 CME Maintenance Halt (16:59 ET)',
+        value: `**Halt Begins:** <t:${haltUnix}:F>\n**Countdown:** <t:${haltUnix}:R>`,
+        inline: true,
+      },
+      {
+        name: '📋 Mandatory Trader Checklist',
+        value:
+          '1️⃣ **Flatten Positions:** Close all open contracts manually before broker auto-close.\n' +
+          '2️⃣ **Cancel Orders:** Verify all resting Limit and Stop orders are cancelled.\n' +
+          '3️⃣ **Verify Zero Position:** Check your trader dashboard / Rithmic / Tradovate to confirm 0 net contracts.',
+        inline: false,
+      },
+      {
+        name: '⚠️ Over-Holding Penalty Warning',
+        value:
+          `Positions remaining open at 16:55 ET are subject to immediate broker-side market liquidation. ` +
+          `Clearing platform auto-liquidation fees ($50–$100) and rule failure penalties may apply.`,
+        inline: false,
+      }
+    );
+
+  if (tenant.supportTicketUrl) {
+    embed.addFields({
+      name: '🎫 Support Desk',
+      value: `Facing trade execution issues? [Contact ${tenant.firmName} Support Immediately](${tenant.supportTicketUrl})`,
+      inline: false,
+    });
+  }
+
+  if (tenant.logoUrl) {
+    embed.setThumbnail(tenant.logoUrl);
+  }
+
+  embed
+    .setFooter({
+      text: `${tenant.firmName} Risk & Trade Desk • Automated Broadcast`,
+    })
+    .setTimestamp();
+
+  return embed;
+}
+
+/**
  * Builds a standardized error embed for command error responses.
  */
 export function buildErrorEmbed(message: string, tenantConfig?: TenantConfig): EmbedBuilder {

@@ -299,3 +299,4 @@ export function findTenantTier(tenant: TenantConfig, query: string | number): Ac
     (t) => t.name.toLowerCase() === clean || t.name.toLowerCase().includes(clean)
   );
 }
+

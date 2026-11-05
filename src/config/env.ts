@@ -8,6 +8,7 @@ export interface EnvConfig {
   DISCORD_TOKEN: string;
   CLIENT_ID: string;
   GUILD_ID?: string;
+  ALERT_CHANNEL_ID?: string;
   DEFAULT_FIRM_PRESET: string;
   NODE_ENV: string;
 }
@@ -20,6 +21,7 @@ export function getEnvConfig(validate = true): EnvConfig {
   const token = process.env.DISCORD_TOKEN?.trim() || '';
   const clientId = process.env.CLIENT_ID?.trim() || '';
   const guildId = process.env.GUILD_ID?.trim() || undefined;
+  const alertChannelId = process.env.ALERT_CHANNEL_ID?.trim() || undefined;
   const defaultFirmPreset = process.env.DEFAULT_FIRM_PRESET?.trim().toLowerCase() || 'generic';
   const nodeEnv = process.env.NODE_ENV?.trim() || 'development';
 
@@ -41,6 +43,7 @@ export function getEnvConfig(validate = true): EnvConfig {
     DISCORD_TOKEN: token,
     CLIENT_ID: clientId,
     GUILD_ID: guildId,
+    ALERT_CHANNEL_ID: alertChannelId,
     DEFAULT_FIRM_PRESET: defaultFirmPreset,
     NODE_ENV: nodeEnv,
   };
