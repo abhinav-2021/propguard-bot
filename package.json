@@ -8,6 +8,7 @@
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "deploy:commands": "ts-node src/scripts/deployCommands.ts",
+    "deploy:commands:prod": "node dist/scripts/deployCommands.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

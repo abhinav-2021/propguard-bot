@@ -1,3 +1,4 @@
+import http from 'http';
 import {
   Client,
   GatewayIntentBits,
@@ -88,10 +89,55 @@ export function scheduleCutoffAlertJob(client: Client, alertChannelId?: string):
   return task;
 }
 
+/**
+ * Starts a minimal HTTP server for platforms like Render, Koyeb, or Hugging Face.
+ * This satisfies platform health checks and enables external uptime monitoring
+ * (e.g. UptimeRobot, cron-job.org) to keep free-tier instances active 24/7.
+ */
+export function startHealthcheckServer(client: Client, port?: string | number): http.Server | null {
+  const targetPort =
+    port !== undefined && port !== null
+      ? Number(port)
+      : process.env.PORT
+      ? Number(process.env.PORT)
+      : null;
+
+  if (targetPort === null || isNaN(targetPort) || targetPort < 0) {
+    return null;
+  }
+
+  const server = http.createServer((req, res) => {
+    const isBotReady = client.isReady();
+
+    if (req.url === '/health' || req.url === '/') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          status: isBotReady ? 'healthy' : 'starting',
+          bot: client.user ? client.user.tag : null,
+          uptime: process.uptime(),
+          timestamp: new Date().toISOString(),
+        })
+      );
+      return;
+    }
+
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
+  });
+
+  server.listen(targetPort, () => {
+    console.log(`[PropGuard Web] Health check server listening on port ${targetPort}`);
+  });
+
+  return server;
+}
+
 export async function startBot(): Promise<Client> {
   const env = getEnvConfig(true);
   const client = createBotClient();
   let alertTask: ScheduledTask | null = null;
+  let httpServer: http.Server | null = null;
 
   client.once('ready', (readyClient) => {
     console.log(`[PropGuard] Bot online! Logged in as: ${readyClient.user.tag}`);
@@ -103,6 +149,9 @@ export async function startBot(): Promise<Client> {
     // Schedule background 16:45 ET cutoff alerts
     alertTask = scheduleCutoffAlertJob(client, env.ALERT_CHANNEL_ID);
   });
+
+  // Start HTTP healthcheck if PORT is set (e.g., Render, Railway, Hugging Face)
+  httpServer = startHealthcheckServer(client);
 
   client.on('interactionCreate', async (interaction: Interaction) => {
     if (!interaction.isChatInputCommand()) return;
@@ -137,6 +186,9 @@ export async function startBot(): Promise<Client> {
     console.log('[PropGuard] Shutting down bot gracefully...');
     if (alertTask) {
       alertTask.stop();
+    }
+    if (httpServer) {
+      httpServer.close();
     }
     client.destroy();
     process.exit(0);

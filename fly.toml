@@ -1,0 +1,21 @@
+# fly.toml app configuration file generated for propguard-bot on 2026-11-07T21:55:43+05:30
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'propguard-bot'
+primary_region = 'iad'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  DEFAULT_FIRM_PRESET = 'generic'
+  NODE_ENV = 'production'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512

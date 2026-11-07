@@ -146,6 +146,102 @@ npm run verify
 
 ---
 
+## 🚢 Fly.io Deployment
+
+PropGuard is containerized as an unrouted worker daemon (outbound WebSocket to Discord Gateway, no inbound HTTP port required).
+
+### 1. Fly CLI Installation & Login
+If not already authenticated:
+```bash
+# Log in to your Fly.io account
+fly auth login
+```
+
+### 2. Launch or Register Application
+Launch the app using the pre-configured [fly.toml](file:///d:/programming/discord_bots/propfirms/propguard-bot/fly.toml):
+```bash
+fly launch --no-deploy --copy-config
+```
+
+### 3. Configure Secrets
+Set production environment secrets in Fly.io (these will not be exposed in your image or repository):
+```bash
+fly secrets set \
+  DISCORD_TOKEN="your_bot_token_here" \
+  CLIENT_ID="your_application_client_id_here" \
+  GUILD_ID="your_optional_guild_id" \
+  ALERT_CHANNEL_ID="your_alert_channel_id"
+```
+
+### 4. Deploy Application
+Deploy to Fly.io using the remote builder:
+```bash
+fly deploy
+```
+
+> [!IMPORTANT]
+> **Single Instance Constraint**: Discord bots must run as a single instance to prevent duplicate command responses and duplicate scheduled 16:45 ET cutoff alerts. Verify your machine count:
+> ```bash
+> fly scale count 1
+> ```
+
+### 5. Monitor & Manage
+```bash
+# Stream live logs
+fly logs
+
+# Check machine status
+fly status
+
+# Restart the bot
+fly apps restart
+```
+
+---
+
+## 🌐 Render.com Deployment (100% Free Tier, No Credit Card)
+
+PropGuard includes a built-in lightweight HTTP healthcheck endpoint (`/health`) on `process.env.PORT` so it can run as a **Free Web Service** on Render.
+
+### 1. Push Code to GitHub
+Push your latest commits to your GitHub repository:
+```bash
+git add .
+git commit -m "Add Render support with keep-alive healthcheck"
+git push origin main
+```
+
+### 2. Create Web Service on Render
+1. Go to **[render.com](https://dashboard.render.com/)** and log in with GitHub (no credit card required).
+2. Click **New +** $\rightarrow$ **Web Service**.
+3. Select your `propguard-bot` repository.
+4. Fill in the service settings (or let Render detect [render.yaml](file:///d:/programming/discord_bots/propfirms/propguard-bot/render.yaml)):
+   * **Name**: `propguard-bot`
+   * **Runtime**: `Node`
+   * **Build Command**: `npm install && npm run build`
+   * **Start Command**: `npm start`
+   * **Instance Type**: `Free` (512MB RAM, 0.1 CPU)
+
+### 3. Add Environment Variables in Render Dashboard
+Under the **Environment Variables** section, add:
+* `DISCORD_TOKEN`: Your Discord bot token
+* `CLIENT_ID`: Your Discord application client ID
+* `ALERT_CHANNEL_ID`: Channel ID for the 16:45 ET cutoff alerts
+* `GUILD_ID`: Optional guild ID for instant slash command registration
+* `NODE_ENV`: `production`
+
+Click **Deploy Web Service**.
+
+### 4. Keep Bot 24/7 Awake with Free Uptime Monitoring
+Render spins down free Web Services after 15 minutes if no HTTP requests arrive. To keep PropGuard running 24/7:
+1. Go to **[cron-job.org](https://cron-job.org)** or **[uptimerobot.com](https://uptimerobot.com)** (100% free, no credit card).
+2. Add a new monitor / cron job:
+   * **URL**: `https://<your-render-subdomain>.onrender.com/health`
+   * **Interval**: Every **10 minutes**
+3. With an HTTP ping every 10 minutes, Render will **never** put the bot to sleep!
+
+---
+
 ## 📄 License
 MIT
 

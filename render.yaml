@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: propguard-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEFAULT_FIRM_PRESET
+        value: generic
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: CLIENT_ID
+        sync: false
+      - key: GUILD_ID
+        sync: false
+      - key: ALERT_CHANNEL_ID
+        sync: false
+
